@@ -50,8 +50,8 @@
 #ifdef _WIN32
 void win_exit()
 {
-	printer::inst()->print_str("Press any key to exit.");
-	get_key();
+	//printer::inst()->print_str("Press any key to exit.");
+	//get_key();
 	return;
 }
 
