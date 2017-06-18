@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Thread configuration for each thread. Make sure it matches the number above.
  * low_power_mode - This mode will double the cache usage, and double the single thread performance. It will 
  *                  consume much less power (as less cores are working), but will max out at around 80-85% of 
@@ -74,7 +74,7 @@ null,
  *                  if a block isn't found within 30 minutes then you might run into nonce collisions. Number
  *                  of threads in this mode is hard-limited to 32.
  */
-"nicehash_nonce" : false,
+"nicehash_nonce" : true,
 
 /*
  * TLS Settings
@@ -94,9 +94,9 @@ null,
  * wallet_address - Your wallet, or pool login.
  * pool_password  - Can be empty in most cases or "x".
  */
-"pool_address" : "pool.supportxmr.com:3333",
+"pool_address" : "cryptonight.eu.nicehash.com:3355",
 "wallet_address" : "",
-"pool_password" : "",
+"pool_password" : "x",
 
 /*
  * Network timeouts.
@@ -138,6 +138,14 @@ null,
  *                This option has no effect if verbose_level is not 4.
  */
 "h_print_time" : 60,
+
+/*
+ * Daemon mode
+ *
+ * If you are running the process in the background and you don't need the keyboard reports, set this to true.
+ * This should solve the hashrate problems on some emulated terminals.
+ */
+"daemon_mode" : false,
 
 /*
  * Output file
