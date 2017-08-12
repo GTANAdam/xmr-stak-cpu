@@ -24,6 +24,7 @@
 #include <assert.h>
 #include <cmath>
 #include <chrono>
+#include <cstring>
 #include <thread>
 #include <bitset>
 #include "console.h"
@@ -51,7 +52,7 @@ void thd_setaffinity(std::thread::native_handle_type h, uint64_t cpu_id)
 {
 #if defined(__APPLE__)
 	thread_port_t mach_thread;
-	thread_affinity_policy_data_t policy = { cpu_id };
+	thread_affinity_policy_data_t policy = { static_cast<integer_t>(cpu_id) };
 	mach_thread = pthread_mach_thread_np(h);
 	thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, 1);
 #elif defined(__FreeBSD__)
@@ -149,7 +150,7 @@ void telemetry::push_perf_value(size_t iThd, uint64_t iHashCount, uint64_t iTime
 	iBucketTop[iThd] = (iTop + 1) & iBucketMask;
 }
 
-minethd::minethd(miner_work& pWork, size_t iNo, bool double_work, bool no_prefetch, int affinity)
+minethd::minethd(miner_work& pWork, size_t iNo, bool double_work, bool no_prefetch, int64_t affinity)
 {
 	oWork = pWork;
 	bQuit = 0;
@@ -160,6 +161,7 @@ minethd::minethd(miner_work& pWork, size_t iNo, bool double_work, bool no_prefet
 	bNoPrefetch = no_prefetch;
 	this->affinity = affinity;
 
+	std::lock_guard<std::mutex> lock(work_thd_mtx);
 	if(double_work)
 		oWorkThd = std::thread(&minethd::double_work_main, this);
 	else
@@ -306,15 +308,6 @@ std::vector<minethd*>* minethd::thread_starter(miner_work& pWork)
 		jconf::inst()->GetThreadConfig(i, cfg);
 
 		minethd* thd = new minethd(pWork, i, cfg.bDoubleMode, cfg.bNoPrefetch, cfg.iCpuAff);
-
-		if(cfg.iCpuAff >= 0)
-		{
-#if defined(__APPLE__)
-			printer::inst()->print_msg(L1, "WARNING on MacOS thread affinity is only advisory.");
-#endif
-			thd_setaffinity(thd->oWorkThd.native_handle(), cfg.iCpuAff);
-		}
-
 		pvThreads->push_back(thd);
 
 		if(cfg.iCpuAff >= 0)
@@ -369,10 +362,24 @@ minethd::cn_hash_fun minethd::func_selector(bool bHaveAes, bool bNoPrefetch)
 	return func_table[digit.to_ulong()];
 }
 
+void minethd::pin_thd_affinity()
+{
+	//Lock is needed because we need to use oWorkThd
+	std::lock_guard<std::mutex> lock(work_thd_mtx);
+
+	// pin memory to NUMA node
+	bindMemoryToNUMANode(affinity);
+
+#if defined(__APPLE__)
+	printer::inst()->print_msg(L1, "WARNING on MacOS thread affinity is only advisory.");
+#endif
+	thd_setaffinity(oWorkThd.native_handle(), affinity);
+}
+
 void minethd::work_main()
 {
-	// pin memory to NUMA node
-	bindMemoryToNUMANode(this->affinity);
+	if(affinity >= 0) //-1 means no affinity
+		pin_thd_affinity();
 
 	cn_hash_fun hash_fun;
 	cryptonight_ctx* ctx;
@@ -461,8 +468,8 @@ minethd::cn_hash_fun_dbl minethd::func_dbl_selector(bool bHaveAes, bool bNoPrefe
 
 void minethd::double_work_main()
 {
-	// pin memory to NUMA node
-	bindMemoryToNUMANode(this->affinity);
+	if(affinity >= 0) //-1 means no affinity
+		pin_thd_affinity();
 
 	cn_hash_fun_dbl hash_fun;
 	cryptonight_ctx* ctx0;
